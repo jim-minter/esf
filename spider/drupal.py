@@ -5,9 +5,10 @@ import httplib
 import lxml.html
 import os
 import re
+import requests
 import time
 import traceback
-import urllib
+import urlparse
 
 import config
 import spider
@@ -15,31 +16,26 @@ import spider
 
 class Connection(object):
   def __init__(self):
-    self.conn = httplib.HTTPSConnection(config.get("drupal-host"))
-    self.cookie = None
+    self.s = requests.session()
 
-  def request(self, method, url, body = None, headers = {}):
-    if self.cookie:
-      headers["Cookie"] = self.cookie
-    self.conn.request(method, url, body, headers)
+  def url(self, href):
+    return urlparse.urljoin(config.get("drupal-url"), href)
 
-    response = self.conn.getresponse()
-    if response.getheader("Set-Cookie"):
-      self.cookie = response.getheader("Set-Cookie").split(";")[0]
-    return response
+  def request(self, method, href, data = None, headers = None):
+    return self.s.request(method, self.url(href), data = data,
+                          headers = headers)
 
   def login(self, username, password):
-    response = self.request("GET", "/user")
-    html = lxml.html.fromstring(response.read())
+    r = self.request("GET", "/user")
+    html = lxml.html.fromstring(r.text)
 
-    params = {}
+    data = {}
     for i in html.xpath("//form[@id = 'user-login']//input"):
-      params[i.get("name")] = i.get("value")
+      data[i.get("name")] = i.get("value")
 
-    params.update({"name": username, "pass": password})
+    data.update({"name": username, "pass": password})
 
-    self.request("POST", "/user", urllib.urlencode(params),
-                 {"Content-Type": "application/x-www-form-urlencoded"})
+    self.request("POST", "/user", data = data)
 
 
 class DrupalRepo(spider.Repo):
@@ -56,12 +52,12 @@ class DrupalRepo(spider.Repo):
     href = "/admin/content"
     while href:
       response = self.ctx.conn.request("GET", href)
-      html = lxml.html.fromstring(response.read())
+      html = lxml.html.fromstring(response.text)
 
       for row in html.xpath("//div[@class = 'content']//tbody//tr"):
         _name = row[1][0].text
         _href = row[1][0].get("href")
-        _url = "https://" + config.get("drupal-host") + _href
+        _url = self.ctx.conn.url(_href)
         _type = row[2].text
         _mtime = calendar.timegm(time.strptime(row[5].text, "%Y-%m-%d %H:%M"))
         yield DrupalPage(self, _name, _url, _type, _mtime, _href)
@@ -83,7 +79,7 @@ class DrupalPage(spider.Document):
 
   def read(self):
     response = self.repo.ctx.conn.request("GET", self.href)
-    html = lxml.html.fromstring(response.read())
+    html = lxml.html.fromstring(response.text)
     if self.type in ["Department", "Office", "Wiki Page"]:
       self.text = body(html)
     elif self.type == "Webform":
@@ -164,6 +160,7 @@ def filedepot_folder_files(xml):
   return xml.xpath("//div[starts-with(@class, 'field field-name-filedepot-folder-file ')]//div[starts-with(@class, 'field-item ')]//a/@href")
 
 if __name__ == "__main__":
+  os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
   username = config.get("drupal-user")
   password = config.get("drupal-pass").decode("base64")
 
