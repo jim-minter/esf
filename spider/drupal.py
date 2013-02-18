@@ -1,17 +1,15 @@
 #!/usr/bin/python
 
-import calendar
-import httplib
 import lxml.html
 import os
 import re
 import requests
-import time
 import traceback
 import urlparse
 
 import config
 import spider
+import utils
 
 
 class Connection(object):
@@ -57,7 +55,7 @@ class DrupalRepo(spider.Repo):
         _href = row[1][0].get("href")
         _url = self.conn.url(_href)
         _type = row[2].text
-        _mtime = calendar.timegm(time.strptime(row[5].text, "%Y-%m-%d %H:%M"))
+        _mtime = utils.parsetime(row[5].text, "%Y-%m-%d %H:%M")
         yield DrupalPage(self, _name, _url, _type, _mtime, _href)
       
       href = html.xpath("//li[@class = 'pager-next']/a/@href")
