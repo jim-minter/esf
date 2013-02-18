@@ -1,0 +1,4 @@
+.config
+.db
+.db-shm
+.db-wal
