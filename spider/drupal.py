@@ -43,21 +43,19 @@ class DrupalRepo(spider.Repo):
 
   def __init__(self, username, password):
     super(DrupalRepo, self).__init__()
-
-  def init_worker(self):
-    self.ctx.conn = Connection()
-    self.ctx.conn.login(username, password)
+    self.conn = Connection()
+    self.conn.login(username, password)
 
   def walk(self):
     href = "/admin/content"
     while href:
-      response = self.ctx.conn.request("GET", href)
+      response = self.conn.request("GET", href)
       html = lxml.html.fromstring(response.text)
 
       for row in html.xpath("//div[@class = 'content']//tbody//tr"):
         _name = row[1][0].text
         _href = row[1][0].get("href")
-        _url = self.ctx.conn.url(_href)
+        _url = self.conn.url(_href)
         _type = row[2].text
         _mtime = calendar.timegm(time.strptime(row[5].text, "%Y-%m-%d %H:%M"))
         yield DrupalPage(self, _name, _url, _type, _mtime, _href)
@@ -78,7 +76,7 @@ class DrupalPage(spider.Document):
     return self._mtime
 
   def read(self):
-    response = self.repo.ctx.conn.request("GET", self.href)
+    response = self.repo.conn.request("GET", self.href)
     html = lxml.html.fromstring(response.text)
     if self.type in ["Department", "Office", "Wiki Page"]:
       self.text = body(html)

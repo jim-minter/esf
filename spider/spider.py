@@ -262,11 +262,9 @@ class Spider(workerpool.WorkerPool):
     super(Spider, self).__init__(threadcount)
 
   def init_worker(self):
-    self.repo.init_worker()
     self.ctx.db = db.DB(".db")
 
   def deinit_worker(self):
-    self.repo.deinit_worker()
     self.ctx.db.close()
 
   def index(self):
@@ -336,15 +334,7 @@ class Spider(workerpool.WorkerPool):
 
 
 class Repo(object):
-  def __init__(self):
-    self.ctx = threading.local()
-    self.init_worker()
-
-  def init_worker(self):
-    pass
-
-  def deinit_worker(self):
-    pass
+  pass
 
 class PntRepo(Repo):
   name = "pnt"
