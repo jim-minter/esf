@@ -1,0 +1,36 @@
+<html>
+<head>
+<script>
+function reqListener () {
+  var js = JSON.parse(this.responseText);
+  var results = document.getElementById("results");
+  var html = "";
+  for(var i = 0; i < js.length; i++) {
+    html += "<br><br><a href=\"" + js[i]["url"] + "\">" + js[i]["name"] +
+  "</a><br><font color=\"#00C000\">" + js[i]["url"] + "</font><br>" + js[i]["snippet"];
+  }
+  results.innerHTML = html;
+}
+
+function foo() {
+  var q = document.forms[0]["q"].value;
+  var req = new XMLHttpRequest();
+  req.onload = reqListener;
+  req.open("GET", "/s?q=" + encodeURIComponent(q));
+  req.send();
+  return false;
+}
+</script>
+</head>
+<body>
+<br>
+<form onsubmit="return foo()">
+<center>
+<input type="text" id="q" style="width:40%" value="pdf"/>
+<input type="submit" value="Search" />
+</center>
+<br>
+</form>
+<div id="results" style="width:40%"></div>
+</body>
+</html>
