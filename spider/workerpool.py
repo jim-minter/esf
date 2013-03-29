@@ -8,25 +8,25 @@ class WorkerPool(object):
   def __init__(self, processcount = 4):
     self.queue = multiprocessing.Queue()
     self.processcount = processcount
-    self.processs = []
+    self.processes = []
 
   def start_processes(self):
     for i in range(self.processcount):
       p = multiprocessing.Process(target = self.worker)
       p.start()
-      self.processs.append(p)
+      self.processes.append(p)
 
   def stop_processes(self):
-    for p in self.processs:
+    for p in self.processes:
       self.queue.put(None)
 
     self.queue.close()
     self.queue.join_thread()
 
-    for p in self.processs:
+    for p in self.processes:
       p.join()
 
-    self.processs = []
+    self.processes = []
 
   def init_worker(self):
     pass

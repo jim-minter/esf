@@ -1,35 +1,16 @@
 #!/usr/bin/python
 
-import calendar
-import functools
 import math
-import requests
 import stat
 import os
-import tarfile
-import tempfile
 import time
 import traceback
-import zipfile
 
 import config
 import db
 import formats
 import utils
 import workerpool
-
-def memo(f):
-  cache = {}
-  @functools.wraps(f)
-  def wrap(*args):
-    if args not in cache:
-      cache[args] = f(*args)
-    return cache[args]
-  return wrap
-
-
-class DownloadException(Exception):
-  pass
 
 
 class Document(object):
@@ -53,7 +34,7 @@ class Document(object):
 
 
 class LocalDocument(Document):
-  @memo
+  @utils.memo
   def type(self):
     return formats.type(self.basepath)
 
@@ -82,34 +63,8 @@ class TempDocument(LocalDocument):
 
 class RemoteDocument(LocalDocument):
   def download(self):
-    (fd, self.basepath) = tempfile.mkstemp()  # TODO: insecure
-    os.close(fd)
-    f = open(self.basepath, "w")
-
     self.report()
-
-    response = requests.get(self.url, prefetch = False, verify = False)
-    if response.status_code != 200:
-      raise DownloadException()
-    remaining = int(response.headers["Content-Length"])
-    r = response.raw
-    while True:
-      data = r.read(4096)
-      remaining -= len(data)
-      if data == "": break
-      f.write(data)
-    f.flush()
-    os.fsync(f.fileno())
-    f.close()
-
-    if remaining > 0:
-      # download terminated early, retry
-      self.done()
-      raise Exception("short read")
-
-    mtime = utils.parsetime(response.headers["Last-Modified"],
-                            "%a, %d %b %Y %H:%M:%S %Z")
-    os.utime(self.basepath, (mtime, mtime))
+    self.basepath = utils.download(self.url)
 
   def done(self):
     os.unlink(self.basepath)
@@ -209,7 +164,7 @@ class Spider(workerpool.WorkerPool):
       try:
         child.download()
         self.do_index(child)
-      except DownloadException:
+      except utils.DownloadException:
         pass
       finally:
         child.done()
