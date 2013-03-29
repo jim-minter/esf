@@ -271,4 +271,4 @@ class Spider(workerpool.WorkerPool):
       except DownloadException:
         pass
       finally:
-        doc.done()
+        child.done()
