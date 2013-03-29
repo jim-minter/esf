@@ -2,8 +2,6 @@
 
 import calendar
 import functools
-import itertools
-import lxml.etree
 import math
 import requests
 import stat
@@ -251,6 +249,8 @@ class Spider(workerpool.WorkerPool):
   def do_index(self, doc):
     if not doc.interesting():
       return
+
+    # TODO: make the transaction length as short as possible for performance
 
     doc.read()
 

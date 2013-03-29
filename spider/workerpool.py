@@ -19,9 +19,11 @@ class WorkerPool(object):
     for p in self.processs:
       self.queue.put(None)
 
+    self.queue.close()
+    self.queue.join_thread()
+
     for p in self.processs:
-      while p.is_alive():
-        p.join(1)
+      p.join()
 
     self.processs = []
 
