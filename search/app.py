@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import json
+import time
 import urlparse
 import web
 
@@ -14,11 +15,15 @@ class Index(object):
 class Search(object):
   def GET(self):
     query = dict(urlparse.parse_qsl(str(web.ctx.query[1:])))
-    print query["q"]
+    if "p" not in query: query["p"] = 0
 
+    cursor = web.ctx.db.execute("SELECT name, url, SNIPPET(documents_fts) AS snippet, mtime FROM documents, documents_fts WHERE documents.rowid = documents_fts.rowid AND content MATCH ? ORDER BY mtime DESC LIMIT ?, 10", [query["q"], str(int(query["p"]) * 10)])
+    fieldnames = [c[0] for c in cursor.description]
     rows = []
-    for row in web.ctx.db.execute("SELECT DISTINCT name, url, SNIPPET(documents_fts) FROM documents, documents_fts WHERE documents.rowid = documents_fts.rowid AND content MATCH ? ORDER BY url LIMIT 10", [query["q"]]):
-      rows.append(dict(zip(["name", "url", "snippet"], row)))
+    for row in cursor:
+      row = dict(zip(fieldnames, row))
+      row["mtime"] = time.strftime("%d %B %Y", time.localtime(row["mtime"]))
+      rows.append(row)
 
     web.header("Content-Type", "application/json")
     return json.dumps(rows)

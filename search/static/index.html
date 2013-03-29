@@ -1,22 +1,52 @@
 <html>
 <head>
 <script>
+var page = 0;
+var query = "";
+
 function reqListener () {
   var js = JSON.parse(this.responseText);
   var results = document.getElementById("results");
   var html = "";
   for(var i = 0; i < js.length; i++) {
-    html += "<br><br><a href=\"" + js[i]["url"] + "\">" + js[i]["name"] +
-  "</a><br><font color=\"#00C000\">" + js[i]["url"] + "</font><br>" + js[i]["snippet"];
+    html += "<br><a href=\"" + js[i]["url"] + "\">" + js[i]["name"] +
+  "</a><br><font color=\"#00C000\">" + js[i]["url"] +
+  "</font><br><font color=\"#808080\">" + js[i]["mtime"] + "</font> - " + js[i]["snippet"] + "<br>";
   }
   results.innerHTML = html;
+
+  var morepages = [];
+  var pages = [];
+  if(page > 0) {
+    morepages.push("<a href=\"#\" onclick=\"foo(0)\">first</a>");
+    morepages.push("<a href=\"#\" onclick=\"foo(" + (page - 1) + ")\">previous</a>");
+  } else {
+    morepages.push("first");
+    morepages.push("previous");
+  }
+
+  for(var i = page - 4; i < page; i++) {
+    if(i >= 0)
+      pages.push("<a href=\"#\" onclick=\"foo(" + i + ")\">" + (i + 1) + "</a>");
+  }
+
+  pages.push(page + 1);
+
+  for(var i = page + 1; pages.length < 10; i++)
+    pages.push("<a href=\"#\" onclick=\"foo(" + i + ")\">" + (i + 1) + "</a>");
+
+  pages.push("<a href=\"#\" onclick=\"foo(" + (page + 1) + ")\">next</a>");
+
+  var pagesdiv = document.getElementById("pages");
+  pagesdiv.innerHTML = morepages.join(" ") + " " + pages.join(" ");
 }
 
-function foo() {
-  var q = document.forms[0]["q"].value;
+function foo(newpage) {
+  page = newpage;
+  query = document.forms[0]["q"].value;
   var req = new XMLHttpRequest();
   req.onload = reqListener;
-  req.open("GET", "/s?q=" + encodeURIComponent(q));
+  req.open("GET", "/s?q=" + encodeURIComponent(query) + "&p=" + page);
   req.send();
   return false;
 }
@@ -24,13 +54,13 @@ function foo() {
 </head>
 <body>
 <br>
-<form onsubmit="return foo()">
+<form onsubmit="return foo(0)">
 <center>
-<input type="text" id="q" style="width:40%" value="pdf"/>
+<input type="text" id="q" style="width:40%" value='"mrg grid"' />
 <input type="submit" value="Search" />
 </center>
-<br>
 </form>
-<div id="results" style="width:40%"></div>
+<center><div id="pages" style="font-family: arial, sans-serif"></div></center>
+<div id="results" style="width:60%; font-family: arial, sans-serif"></div>
 </body>
 </html>
