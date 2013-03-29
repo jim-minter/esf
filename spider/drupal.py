@@ -2,17 +2,16 @@
 
 import lxml.html
 import os
-import re
 import requests
-import traceback
 import urlparse
 
 import config
+import formats
 import spider
 import utils
 
 
-class Connection(object):
+class DrupalConnection(object):
   def __init__(self):
     self.s = requests.session()
 
@@ -41,7 +40,7 @@ class DrupalRepo(spider.Repo):
 
   def __init__(self, username, password):
     super(DrupalRepo, self).__init__()
-    self.conn = Connection()
+    self.conn = DrupalConnection()
     self.conn.login(username, password)
 
   def walk(self):
@@ -70,6 +69,9 @@ class DrupalPage(spider.Document):
     self._mtime = mtime
     self.href = href
 
+  def interesting(self):
+    return True
+
   def mtime(self):
     return self._mtime
 
@@ -79,7 +81,7 @@ class DrupalPage(spider.Document):
     if self.type in ["Department", "Office", "Wiki Page"]:
       self.text = body(html)
     elif self.type == "Webform":
-      self.text = strip_ws(body(html) + form(html))
+      self.text = formats.html.strip_ws(body(html) + form(html))
 
     if self.type == "Filedepot Folder":
       self.hrefs = filedepot_folder_files(html)
@@ -88,64 +90,20 @@ class DrupalPage(spider.Document):
 
   def children(self):
     for href in self.hrefs:
-      try:
-        yield spider.RemoteDocument(self.repo, os.path.split(href)[1], href, self.ancestors + [self])
-      except Exception, e:
-        print "ERROR: %s on %s, continuing" % (e.message, href)
-        traceback.print_exc()
+      yield spider.RemoteDocument(self.repo, os.path.split(href)[1], href, self.ancestors + [self])
 
-
-ws = re.compile("(\s|\xa0)+")
-# br, option added
-block_tags = ["address", "blockquote", "br", "div", "dd", "dl", "dt",
-              "fieldset", "form", "h1", "h2", "h3", "h4", "h5", "h6", "hr",
-              "li", "noscript", "ol", "option", "p", "pre", "table", "tbody",
-              "td", "tfoot", "th", "thead", "tr", "ul"]
-
-def strip_ws(s):
-  lines = s.split("\n")
-  for i in range(len(lines)):
-    lines[i] = ws.sub(" ", lines[i]).strip()
-  return "\n".join([l for l in lines if l])
-
-def render_html(e):
-  def _render_html(e):
-    if isinstance(e, lxml.html.HtmlComment):
-      return
-    if e.tag == "div" and e.get("class") == "mcePaste":
-      return
-    if e.tag in ["object", "script", "title", "video"]:
-      return
-
-    if e.tag in block_tags:
-      yield "\n"
-
-    if e.text:
-      yield e.text.replace("\n", " ")
-
-    for _e in e:
-      for t in _render_html(_e):
-        yield t
-
-    if e.tag in block_tags:
-      yield "\n"
-
-    if e.tail:
-      yield e.tail.replace("\n", " ")
-
-  return strip_ws("".join(_render_html(e)))
 
 def body(xml):
   _body = xml.xpath("//div[starts-with(@class, 'field field-name-body ')]")
   if _body:
-    return render_html(_body[0])
+    return formats.html.render(_body[0])
   else:
     return ""
 
 def form(xml):
   _form = xml.xpath("//form[@class = 'webform-client-form']")
   if _form:
-    return render_html(_form[0])
+    return formats.html.render(_form[0])
   else:
     return ""
 
@@ -155,9 +113,12 @@ def field_file_attachments(xml):
 def filedepot_folder_files(xml):
   return xml.xpath("//div[starts-with(@class, 'field field-name-filedepot-folder-file ')]//div[starts-with(@class, 'field-item ')]//a/@href")
 
-if __name__ == "__main__":
+def main():
   os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
   username = config.get("drupal-user")
   password = config.get("drupal-pass").decode("base64")
 
   spider.Spider(DrupalRepo(username, password), 0).index()
+
+if __name__ == "__main__":
+  main()

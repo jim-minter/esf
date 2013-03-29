@@ -11,8 +11,6 @@ class WorkerPool(object):
     self.threadcount = threadcount
     self.threads = []
 
-    self.init_worker()
-
   def start_threads(self):
     for i in range(self.threadcount):
       t = threading.Thread(target = self.worker, name = i)
