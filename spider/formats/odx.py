@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+import lxml.etree
+import zipfile
+
 def read(f):
   def walk_xml(xml, text):
     if xml.tag == "{%s}tracked-changes" % xml.nsmap["text"] \

@@ -1,5 +1,9 @@
 #!/usr/bin/python
 
+import itertools
+import lxml.etree
+import zipfile
+
 def read(f):
   def walk_xml(xml, text):
     if xml.tag == "{%s}tableStyleId" % xml.nsmap["a"]:
