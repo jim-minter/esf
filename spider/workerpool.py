@@ -1,32 +1,29 @@
 #!/usr/bin/python
 
-import Queue
-import threading
+import multiprocessing
+import traceback
 
 class WorkerPool(object):
-  def __init__(self, threadcount = 4):
-    self.ctx = threading.local()
-    self.queue = Queue.Queue()
-    self.sentinel = object()
-    self.threadcount = threadcount
-    self.threads = []
+  def __init__(self, processcount = 4):
+    self.queue = multiprocessing.Queue()
+    self.processcount = processcount
+    self.processs = []
 
-  def start_threads(self):
-    for i in range(self.threadcount):
-      t = threading.Thread(target = self.worker, name = i)
-      t.daemon = True
-      t.start()
-      self.threads.append(t)
+  def start_processes(self):
+    for i in range(self.processcount):
+      p = multiprocessing.Process(target = self.worker)
+      p.start()
+      self.processs.append(p)
 
-  def stop_threads(self):
-    for t in self.threads:
-      self.queue.put(self.sentinel)
+  def stop_processes(self):
+    for p in self.processs:
+      self.queue.put(None)
 
-    for t in self.threads:
-      while t.isAlive():
-        t.join(1)
+    for p in self.processs:
+      while p.is_alive():
+        p.join(1)
 
-    self.threads = []
+    self.processs = []
 
   def init_worker(self):
     pass
@@ -35,24 +32,22 @@ class WorkerPool(object):
     pass
 
   def do_work(self, item):
-    item[0](*item[1:])
+    pass
 
   def worker(self):
     self.init_worker()
 
-    for item in iter(self.queue.get, self.sentinel):
+    for item in iter(self.queue.get, None):
       try:
         self.do_work(item)
       except Exception, e:
         print "ERROR: %s" % e.message
         traceback.print_exc()
-      self.queue.task_done()
-    self.queue.task_done()
 
     self.deinit_worker()
 
   def enqueue(self, item):
-    if self.threadcount:
+    if self.processcount:
       self.queue.put(item)
     else:
       self.do_work(item)

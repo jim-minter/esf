@@ -9,7 +9,6 @@ import requests
 import stat
 import os
 import tarfile
-import threading
 import tempfile
 import time
 import traceback
@@ -185,41 +184,44 @@ class Repo(object):
 
 
 class Spider(workerpool.WorkerPool):
-  def __init__(self, repo, threadcount = 4):
-    super(Spider, self).__init__(threadcount)
+  def __init__(self, repo, processcount = 4):
+    super(Spider, self).__init__(processcount)
     self.repo = repo
 
   def init_worker(self):
-    self.ctx.db = db.DB(".db")
+    self.db = db.DB(".db")
 
   def deinit_worker(self):
-    self.ctx.db.close()
+    self.db.close()
+
+  def do_work(self, item):
+    self.index_doc(item)
 
   def index(self):
     self.init_worker()
-    self.start_threads()
+    self.start_processes()
 
     now = math.floor(time.time())
 
     for doc in self.repo.walk():
-      self.enqueue([self.index_doc, doc])
+      self.enqueue(doc)
 
-    self.stop_threads()
+    self.stop_processes()
 
-    self.ctx.db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
+    self.db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
                         [self.repo.name, now])
-    self.ctx.db.commit()
+    self.db.commit()
     self.deinit_worker()
 
   def touch(self, doc):
-    c = self.ctx.db.execute("SELECT rowid FROM documents WHERE url = ?", [doc.url])
+    c = self.db.execute("SELECT rowid FROM documents WHERE url = ?", [doc.url])
     doc.id = c.fetchone()[0]
 
-    self.ctx.db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree WHERE parent = ?)", [doc.id])
-    self.ctx.db.commit()
+    self.db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree WHERE parent = ?)", [doc.id])
+    self.db.commit()
 
   def fresh(self, doc):
-    c = self.ctx.db.execute("SELECT mtime FROM documents WHERE url = ?", [doc.url])
+    c = self.db.execute("SELECT mtime FROM documents WHERE url = ?", [doc.url])
     r = c.fetchone()
     return r and r[0] == doc.mtime()
 
@@ -239,9 +241,9 @@ class Spider(workerpool.WorkerPool):
       except Exception, e:
         print "ERROR: %s on %s" % (e.message, doc.name)
         traceback.print_exc()
-        self.ctx.db.rollback()
+        self.db.rollback()
 
-      self.ctx.db.commit()
+      self.db.commit()
 
     finally:
       doc.done()
@@ -250,16 +252,17 @@ class Spider(workerpool.WorkerPool):
     if not doc.interesting():
       return
 
-    c = self.ctx.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [doc.repo.name, doc.name, doc.url, doc.mtime()])
+    doc.read()
+
+    c = self.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [doc.repo.name, doc.name, doc.url, doc.mtime()])
     doc.id = c.lastrowid
 
     if doc.ancestors:
-      self.ctx.db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
+      self.db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
                               [[a.id, doc.id, len(doc.ancestors) - i] for (i, a) in enumerate(doc.ancestors)])
 
-    doc.read()
     if doc.text:
-      self.ctx.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [doc.id, doc.text])
+      self.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [doc.id, doc.text])
       
     for child in doc.children():
       try:
