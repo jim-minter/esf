@@ -2,7 +2,7 @@
 
 import config
 import multiprocessing
-import traceback
+import utils
 
 class WorkerPool(object):
   def __init__(self, processcount = 4):
@@ -12,7 +12,7 @@ class WorkerPool(object):
 
   def start_processes(self):
     for i in range(self.processcount):
-      p = multiprocessing.Process(target = self.worker)
+      p = multiprocessing.Process(target = self.worker, name = "p%u" % (i + 1))
       p.start()
       self.processes.append(p)
 
@@ -43,11 +43,10 @@ class WorkerPool(object):
     for item in iter(self.queue.get, None):
       try:
         self.do_work(item)
-      except Exception, e:
-        print "ERROR: %s" % e.message
-        traceback.print_exc()
+      except Exception:
+        utils.log.exception("")
         if config.get("errors-fatal"):
-          raise
+          raise SystemExit
 
     self.deinit_worker()
 

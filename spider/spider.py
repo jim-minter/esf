@@ -4,7 +4,6 @@ import math
 import stat
 import os
 import time
-import traceback
 
 import config
 import db
@@ -22,9 +21,9 @@ class Document(object):
 
   def report(self):
     if self.url:
-      print "  " * len(self.ancestors) + self.url
+      utils.log.info("  " * len(self.ancestors) + self.url)
     else:
-      print "  " * len(self.ancestors) + self.name
+      utils.log.info("  " * len(self.ancestors) + self.name)
 
   def download(self):
     self.report()
@@ -130,10 +129,10 @@ class Spider(workerpool.WorkerPool):
       try:
         self.do_index(doc)
       except Exception, e:
-        print "ERROR: %s on %s" % (e.message, doc.name)
-        traceback.print_exc()
         if config.get("errors-fatal"):
           raise
+
+        utils.log.exception("")
 
         self.db.rollback()
 

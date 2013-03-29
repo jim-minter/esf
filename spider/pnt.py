@@ -28,7 +28,7 @@ class PntDocument(spider.LocalDocument):
 
 
 def main():
-  spider.Spider(PntRepo(), 0).index()
+  spider.Spider(PntRepo()).index()
 
 if __name__ == "__main__":
   main()

@@ -2,9 +2,9 @@
 
 import calendar
 import functools
+import logging
 import os
 import requests
-import sys
 import tempfile
 import time
 
@@ -41,9 +41,6 @@ def download(url):
 
   return path
 
-def log(s):
-  sys.stderr.write(s)
-
 def memo(f):
   cache = {}
   @functools.wraps(f)
@@ -55,3 +52,11 @@ def memo(f):
 
 def parsetime(string, format):
   return calendar.timegm(time.strptime(string, format))
+
+def init_log():
+  log = logging.getLogger()
+  logging.basicConfig(format = "%(processName)s %(asctime)s %(levelname)s %(message)s", datefmt = "%Y/%b/%d-%H:%M:%S")
+  log.setLevel(0)
+  return log
+
+log = init_log()
