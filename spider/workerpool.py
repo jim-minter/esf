@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import config
 import multiprocessing
 import traceback
 
@@ -45,6 +46,8 @@ class WorkerPool(object):
       except Exception, e:
         print "ERROR: %s" % e.message
         traceback.print_exc()
+        if config.get("errors-fatal"):
+          raise
 
     self.deinit_worker()
 

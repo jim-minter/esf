@@ -55,40 +55,7 @@ class Document(object):
 class LocalDocument(Document):
   @memo
   def type(self):
-    with open(self.basepath, "r") as f:
-      buf = f.read(4)
-
-    # txt, html
-    # audio/video: m4v, mov, mp[34], og[agvx]
-    # legacy MS formats: doc, ppt
-    # spreadsheets(?): ods, xls[mx]?
-    # templates(?): ot[pst]
-    if buf[:4] == "%PDF":
-      return "pdf"
-    elif zipfile.is_zipfile(self.basepath):
-      with zipfile.ZipFile(self.basepath) as z:
-        if "mimetype" in z.namelist():
-          mimetype = z.read("mimetype")
-          if mimetype == "application/vnd.oasis.opendocument.presentation":
-            return "odp"
-          elif mimetype == "application/vnd.oasis.opendocument.text":
-            return "odt"
-          else:
-            return None
-
-        if "[Content_Types].xml" in z.namelist():
-          if "word/document.xml" in z.namelist():
-            return "docx"
-          elif "ppt/presentation.xml" in z.namelist():
-            return "pptx"
-          else:
-            return None
-
-      return "zip"
-    elif tarfile.is_tarfile(self.basepath):
-      return "tar"
-    else:
-      return None
+    return formats.type(self.basepath)
 
   def interesting(self):
     return self.type() is not None
@@ -97,40 +64,11 @@ class LocalDocument(Document):
     return os.stat(self.basepath)[stat.ST_MTIME]
 
   def read(self):
-    self.text = None
-    if self.type() == "docx":
-      self.text = formats.docx.read(self.basepath)
-    elif self.type() == "pdf":
-      self.text = formats.pdf.read(self.basepath)
-    elif self.type() == "pptx":
-      self.text = formats.pptx.read(self.basepath)
-    elif self.type() in ["odp", "odt"]:
-      self.text = formats.odx.read(self.basepath)
+    self.text = formats.read(self.basepath, self.type())
 
   def children(self):
-    if self.type() == "zip":
-      with zipfile.ZipFile(self.basepath) as z:
-        for zi in z.infolist():
-          (fd, path) = tempfile.mkstemp()  # TODO: insecure
-          os.close(fd)
-          with open(path, "w") as f:       # TODO: do this piecewise
-            f.write(z.read(zi))
-          mtime = calendar.timegm(zi.date_time)
-          os.utime(path, (mtime, mtime))
-          child = TempDocument(self.repo, os.path.split(zi.filename)[1], None, path, self.ancestors + [self])
-          yield child
-    elif self.type() == "tar":
-      with tarfile.open(self.basepath) as t:
-        for ti in t.getmembers():
-          if not ti.isfile():
-            continue
-          (fd, path) = tempfile.mkstemp()  # TODO: insecure
-          os.close(fd)
-          with open(path, "w") as f:       # TODO: do this piecewise
-            f.write(t.extractfile(ti).read())
-          os.utime(path, (ti.mtime, ti.mtime))
-          child = TempDocument(self.repo, os.path.split(ti.name)[1], None, path, self.ancestors + [self])
-          yield child
+    for (filename, path) in formats.iter(self.basepath):
+      yield TempDocument(self.repo, os.path.split(filename)[1], None, path, self.ancestors + [self])
 
 
 class TempDocument(LocalDocument):
@@ -239,6 +177,9 @@ class Spider(workerpool.WorkerPool):
       except Exception, e:
         print "ERROR: %s on %s" % (e.message, doc.name)
         traceback.print_exc()
+        if config.get("errors-fatal"):
+          raise
+
         self.db.rollback()
 
       self.db.commit()
