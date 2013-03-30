@@ -38,10 +38,11 @@ class DrupalConnection(object):
 class DrupalRepo(spider.Repo):
   name = "intranet"
 
-  def __init__(self, username, password):
+  def __init__(self):
     super(DrupalRepo, self).__init__()
     self.conn = DrupalConnection()
-    self.conn.login(username, password)
+    self.conn.login(config.get("drupal-user"),
+                    config.get("drupal-pass").decode("base64"))
 
   def walk(self):
     href = "/admin/content"
@@ -112,13 +113,3 @@ def field_file_attachments(xml):
 
 def filedepot_folder_files(xml):
   return xml.xpath("//div[starts-with(@class, 'field field-name-filedepot-folder-file ')]//div[starts-with(@class, 'field-item ')]//a/@href")
-
-def main():
-  os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
-  username = config.get("drupal-user")
-  password = config.get("drupal-pass").decode("base64")
-
-  spider.Spider(DrupalRepo(username, password), 0).index()
-
-if __name__ == "__main__":
-  main()

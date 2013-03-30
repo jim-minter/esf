@@ -1,7 +1,10 @@
 #!/usr/bin/python
 
+import argparse
+import importlib
 import math
 import stat
+import sys
 import os
 import time
 
@@ -167,3 +170,22 @@ class Spider(workerpool.WorkerPool):
         pass
       finally:
         child.done()
+
+def parse_args():
+  ap = argparse.ArgumentParser()
+  ap.add_argument("repo")
+  return ap.parse_args()
+
+def get_repo(name):
+  path = "repos.%s" % name
+  importlib.import_module(path)
+  return getattr(sys.modules[path], "%sRepo" % name.capitalize())()
+
+def main():
+  os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
+  args = parse_args()
+  repo = get_repo(args.repo)
+  Spider(repo).index()
+
+if __name__ == "__main__":
+  main()

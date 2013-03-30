@@ -25,10 +25,3 @@ class PntDocument(spider.LocalDocument):
   def __init__(self, repo, name, url, basepath, ancestors = []):
     super(spider.LocalDocument, self).__init__(repo, name, url, ancestors)
     self.basepath = basepath
-
-
-def main():
-  spider.Spider(PntRepo()).index()
-
-if __name__ == "__main__":
-  main()
