@@ -174,6 +174,7 @@ class Spider(workerpool.WorkerPool):
 def parse_args():
   ap = argparse.ArgumentParser()
   ap.add_argument("repo")
+  ap.add_argument("-w", "--workers", type = int, default = 4)
   return ap.parse_args()
 
 def get_repo(name):
@@ -185,7 +186,7 @@ def main():
   os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
   args = parse_args()
   repo = get_repo(args.repo)
-  Spider(repo).index()
+  Spider(repo, args.workers).index()
 
 if __name__ == "__main__":
   main()
