@@ -3,8 +3,8 @@
 import argparse
 import importlib
 import math
-import stat
 import os
+import stat
 import time
 
 import config
@@ -28,14 +28,11 @@ class Document(object):
       utils.log.info("  " * len(self.ancestors) + self.name)
 
   def download(self):
-    self.report()
-
-  def done(self):
     pass
 
 
 class LocalDocument(Document):
-  @utils.memo
+  @utils.simple_memo
   def type(self):
     return formats.type(self.basepath)
 
@@ -58,16 +55,15 @@ class TempDocument(LocalDocument):
     super(LocalDocument, self).__init__(repo, name, url, ancestors)
     self.basepath = basepath
 
-  def done(self):
+  def __del__(self):
     os.unlink(self.basepath)
 
 
 class RemoteDocument(LocalDocument):
   def download(self):
-    self.report()
     self.basepath = utils.download(self.url)
 
-  def done(self):
+  def __del__(self):
     os.unlink(self.basepath)
 
 
@@ -76,7 +72,7 @@ class Repo(object):
 
 
 class Spider(workerpool.WorkerPool):
-  def __init__(self, repo, processcount = 4):
+  def __init__(self, repo, processcount = None):
     super(Spider, self).__init__(processcount)
     self.repo = repo
 
@@ -90,8 +86,8 @@ class Spider(workerpool.WorkerPool):
     self.index_doc(item)
 
   def index(self):
-    self.init_worker()
     self.start_processes()
+    self.init_worker()
 
     now = math.floor(time.time())
 
@@ -101,7 +97,7 @@ class Spider(workerpool.WorkerPool):
     self.stop_processes()
 
     self.db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
-                        [self.repo.name, now])
+                    [self.repo.name, now])
     self.db.commit()
     self.deinit_worker()
 
@@ -118,30 +114,27 @@ class Spider(workerpool.WorkerPool):
     return r and r[0] == doc.mtime()
 
   def index_doc(self, doc):
+    doc.report()
     doc.download()
 
+    if not doc.interesting():
+      return
+
+    if self.fresh(doc):
+      self.touch(doc)
+      return
+
     try:
-      if not doc.interesting():
-        return
+      self.do_index(doc)
+    except Exception, e:
+      if config.get("errors-fatal"):
+        raise
 
-      if self.fresh(doc):
-        self.touch(doc)
-        return
+      utils.log.exception("")
 
-      try:
-        self.do_index(doc)
-      except Exception, e:
-        if config.get("errors-fatal"):
-          raise
+      self.db.rollback()
 
-        utils.log.exception("")
-
-        self.db.rollback()
-
-      self.db.commit()
-
-    finally:
-      doc.done()
+    self.db.commit()
 
   def do_index(self, doc):
     if not doc.interesting():
@@ -162,13 +155,12 @@ class Spider(workerpool.WorkerPool):
       self.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [doc.id, doc.text])
       
     for child in doc.children():
+      child.report()
       try:
         child.download()
         self.do_index(child)
       except utils.DownloadException:
         pass
-      finally:
-        child.done()
 
 def parse_args():
   ap = argparse.ArgumentParser()

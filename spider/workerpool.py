@@ -5,7 +5,10 @@ import multiprocessing
 import utils
 
 class WorkerPool(object):
-  def __init__(self, processcount = 4):
+  def __init__(self, processcount = None):
+    if not processcount or processcount < 1:
+      processcount = multiprocessing.cpu_count()
+
     self.queue = multiprocessing.Queue()
     self.processcount = processcount
     self.processes = []
@@ -51,7 +54,4 @@ class WorkerPool(object):
     self.deinit_worker()
 
   def enqueue(self, item):
-    if self.processcount:
-      self.queue.put(item)
-    else:
-      self.do_work(item)
+    self.queue.put(item)

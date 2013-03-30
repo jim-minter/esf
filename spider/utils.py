@@ -7,6 +7,7 @@ import os
 import requests
 import tempfile
 import time
+import weakref
 
 class DownloadException(Exception):
   pass
@@ -41,13 +42,13 @@ def download(url):
 
   return path
 
-def memo(f):
-  cache = {}
+def simple_memo(f):
+  cache = weakref.WeakKeyDictionary()
   @functools.wraps(f)
-  def wrap(*args):
-    if args not in cache:
-      cache[args] = f(*args)
-    return cache[args]
+  def wrap(self):
+    if self not in cache:
+      cache[self] = f(self)
+    return cache[self]
   return wrap
 
 def parsetime(string, format):
