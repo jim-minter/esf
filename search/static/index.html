@@ -46,7 +46,7 @@ function foo(newpage) {
   query = document.forms[0]["q"].value;
   var req = new XMLHttpRequest();
   req.onload = reqListener;
-  req.open("GET", "/s?q=" + encodeURIComponent(query) + "&p=" + page);
+  req.open("GET", "s?q=" + encodeURIComponent(query) + "&p=" + page);
   req.send();
   return false;
 }
@@ -56,7 +56,7 @@ function foo(newpage) {
 <br>
 <form onsubmit="return foo(0)">
 <center>
-<input type="text" id="q" style="width:40%" value='"mrg grid"' />
+<input type="text" id="q" style="width:40%"' />
 <input type="submit" value="Search" />
 </center>
 </form>

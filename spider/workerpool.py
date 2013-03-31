@@ -51,7 +51,7 @@ class WorkerPool(object):
         self.do_work(item)
       except Exception:
         utils.log.exception("")
-        if config.get("errors-fatal"):
+        if config.getboolean("errors-fatal"):
           raise SystemExit
 
     self.deinit_worker()
