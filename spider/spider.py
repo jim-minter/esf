@@ -7,8 +7,8 @@ import os
 import stat
 import time
 
+from db import DB
 import config
-import db
 import formats
 import utils
 import workerpool
@@ -29,6 +29,26 @@ class Document(object):
 
   def download(self):
     pass
+
+  def fresh(self):
+    c = db.execute("SELECT mtime FROM documents WHERE url = ?", [self.url])
+    r = c.fetchone()
+    return r and r[0] == self.mtime()
+
+  def index_one(self):
+    c = db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [self.repo.name, self.name, self.url, self.mtime()])
+    self.id = c.lastrowid
+
+    if self.ancestors:
+      db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
+                     [[a.id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
+
+    if self.text:
+      db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
+
+  def touch(self):
+    db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree INNER JOIN documents ON documents_tree.parent = documents.rowid WHERE url = ?)", [self.url])
+    db.commit()
 
 
 class LocalDocument(Document):
@@ -77,10 +97,11 @@ class Spider(workerpool.WorkerPool):
     self.repo = repo
 
   def init_worker(self):
-    self.db = db.DB(".db")
+    global db
+    db = DB(".db")
 
   def deinit_worker(self):
-    self.db.close()
+    db.close()
 
   def do_work(self, item):
     self.index_doc(item)
@@ -96,22 +117,10 @@ class Spider(workerpool.WorkerPool):
 
     self.stop_processes()
 
-    self.db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
-                    [self.repo.name, now])
-    self.db.commit()
+    db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
+               [self.repo.name, now])
+    db.commit()
     self.deinit_worker()
-
-  def touch(self, doc):
-    c = self.db.execute("SELECT rowid FROM documents WHERE url = ?", [doc.url])
-    doc.id = c.fetchone()[0]
-
-    self.db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree WHERE parent = ?)", [doc.id])
-    self.db.commit()
-
-  def fresh(self, doc):
-    c = self.db.execute("SELECT mtime FROM documents WHERE url = ?", [doc.url])
-    r = c.fetchone()
-    return r and r[0] == doc.mtime()
 
   def index_doc(self, doc):
     doc.report()
@@ -120,21 +129,21 @@ class Spider(workerpool.WorkerPool):
     if not doc.interesting():
       return
 
-    if self.fresh(doc):
-      self.touch(doc)
+    if doc.fresh():
+      doc.touch()
       return
 
     try:
       self.do_index(doc)
+      db.commit()
+
     except Exception, e:
+      db.rollback()
+
       if config.get("errors-fatal"):
         raise
 
       utils.log.exception("")
-
-      self.db.rollback()
-
-    self.db.commit()
 
   def do_index(self, doc):
     if not doc.interesting():
@@ -143,17 +152,8 @@ class Spider(workerpool.WorkerPool):
     # TODO: make the transaction length as short as possible for performance
 
     doc.read()
+    doc.index_one()
 
-    c = self.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [doc.repo.name, doc.name, doc.url, doc.mtime()])
-    doc.id = c.lastrowid
-
-    if doc.ancestors:
-      self.db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
-                              [[a.id, doc.id, len(doc.ancestors) - i] for (i, a) in enumerate(doc.ancestors)])
-
-    if doc.text:
-      self.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [doc.id, doc.text])
-      
     for child in doc.children():
       child.report()
       try:
@@ -180,4 +180,5 @@ def main():
   Spider(repo, args.workers).index()
 
 if __name__ == "__main__":
-  main()
+  import spider
+  spider.main()
