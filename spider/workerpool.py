@@ -5,11 +5,14 @@ import multiprocessing
 import utils
 
 class WorkerPool(object):
-  def __init__(self, processcount = None):
+  def __init__(self, processcount = None, maxsize = 0):
     if not processcount or processcount < 1:
       processcount = multiprocessing.cpu_count()
 
-    self.queue = multiprocessing.Queue()
+    if maxsize is None:
+      maxsize = 4 * processcount
+
+    self.queue = multiprocessing.Queue(maxsize)
     self.processcount = processcount
     self.processes = []
 

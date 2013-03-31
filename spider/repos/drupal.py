@@ -34,8 +34,11 @@ class DrupalConnection(object):
 
     self.request("POST", "/user", data = data)
 
+  def __getstate__(self):
+    return { k: self.__dict__[k] for k in self.__dict__.keys() if k != "s" }
 
-class DrupalRepo(spider.Repo):
+
+class DrupalRepo(object):
   name = "intranet"
 
   def __init__(self):
@@ -70,14 +73,11 @@ class DrupalPage(spider.Document):
     self._mtime = mtime
     self.href = href
 
-  def interesting(self):
-    return True
-
   def mtime(self):
     return self._mtime
 
   def read(self):
-    response = self.repo.conn.request("GET", self.href)
+    response = spider.s.get(self.url)
     html = lxml.html.fromstring(response.text)
     if self.type in ["Department", "Office", "Wiki Page"]:
       self.text = body(html)

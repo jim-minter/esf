@@ -9,17 +9,20 @@ import tempfile
 import time
 import weakref
 
+import spider
+
+
 class DownloadException(Exception):
   pass
 
 
 def download(url):
-  response = requests.get(url, prefetch = False, verify = False)
+  response = spider.s.get(url, stream = True)
   if response.status_code != 200:
     raise DownloadException()
 
   (fd, path) = tempfile.mkstemp()
-  f = os.fdopen(fd)
+  f = os.fdopen(fd, "w")
 
   remaining = int(response.headers["Content-Length"])
   r = response.raw

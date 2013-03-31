@@ -4,6 +4,7 @@ import argparse
 import importlib
 import math
 import os
+import requests
 import stat
 import time
 
@@ -31,6 +32,7 @@ class Document(object):
     pass
 
   def fresh(self):
+    assert not self.ancestors
     c = db.execute("SELECT mtime FROM documents WHERE url = ?", [self.url])
     r = c.fetchone()
     return r and r[0] == self.mtime()
@@ -47,58 +49,49 @@ class Document(object):
       db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
 
   def touch(self):
+    assert not self.ancestors
     db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree INNER JOIN documents ON documents_tree.parent = documents.rowid WHERE url = ?)", [self.url])
-    db.commit()
 
 
 class LocalDocument(Document):
-  @utils.simple_memo
-  def type(self):
-    return formats.type(self.basepath)
-
-  def interesting(self):
-    return self.type() is not None
+  def __init__(self, repo, name, url, ancestors = []):
+    super(LocalDocument, self).__init__(repo, name, url, ancestors)
+    self.unlink = False
 
   def mtime(self):
     return os.stat(self.basepath)[stat.ST_MTIME]
 
   def read(self):
-    self.text = formats.read(self.basepath, self.type())
+    self.text = formats.read(self.basepath)
 
   def children(self):
     for (filename, path) in formats.iter(self.basepath):
-      yield TempDocument(self.repo, os.path.split(filename)[1], None, path, self.ancestors + [self])
-
-
-class TempDocument(LocalDocument):
-  def __init__(self, repo, name, url, basepath, ancestors = []):
-    super(LocalDocument, self).__init__(repo, name, url, ancestors)
-    self.basepath = basepath
+      child = LocalDocument(self.repo, os.path.split(filename)[1], None, self.ancestors + [self])
+      child.basepath = path
+      child.unlink = True
+      yield child
 
   def __del__(self):
-    os.unlink(self.basepath)
+    if self.unlink:
+      os.unlink(self.basepath)
 
 
 class RemoteDocument(LocalDocument):
   def download(self):
     self.basepath = utils.download(self.url)
-
-  def __del__(self):
-    os.unlink(self.basepath)
-
-
-class Repo(object):
-  pass
+    self.unlink = True
 
 
 class Spider(workerpool.WorkerPool):
   def __init__(self, repo, processcount = None):
-    super(Spider, self).__init__(processcount)
+    super(Spider, self).__init__(processcount, None)
     self.repo = repo
 
   def init_worker(self):
     global db
     db = DB(".db")
+    global s
+    s = requests.session()
 
   def deinit_worker(self):
     db.close()
@@ -107,18 +100,18 @@ class Spider(workerpool.WorkerPool):
     self.index_doc(item)
 
   def index(self):
-    self.start_processes()
-    self.init_worker()
+    starttime = math.floor(time.time())
 
-    now = math.floor(time.time())
+    self.start_processes()
 
     for doc in self.repo.walk():
       self.enqueue(doc)
 
     self.stop_processes()
 
+    self.init_worker()
     db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
-               [self.repo.name, now])
+               [self.repo.name, starttime])
     db.commit()
     self.deinit_worker()
 
@@ -126,29 +119,20 @@ class Spider(workerpool.WorkerPool):
     doc.report()
     doc.download()
 
-    if not doc.interesting():
-      return
-
     if doc.fresh():
       doc.touch()
+      db.commit()
       return
 
     try:
       self.do_index(doc)
       db.commit()
 
-    except Exception, e:
+    except Exception:
       db.rollback()
-
-      if config.get("errors-fatal"):
-        raise
-
-      utils.log.exception("")
+      raise
 
   def do_index(self, doc):
-    if not doc.interesting():
-      return
-
     # TODO: make the transaction length as short as possible for performance
 
     doc.read()

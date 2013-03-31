@@ -5,7 +5,7 @@ import os
 import config
 import spider
 
-class PntRepo(spider.Repo):
+class PntRepo(object):
   name = "pnt"
 
   def walk(self):
@@ -18,10 +18,6 @@ class PntRepo(spider.Repo):
         url = os.path.join(config.get("pnt-urlbase"),
                            os.path.relpath(p, base))
 
-        yield PntDocument(self, f, url, p)
-
-
-class PntDocument(spider.LocalDocument):
-  def __init__(self, repo, name, url, basepath, ancestors = []):
-    super(spider.LocalDocument, self).__init__(repo, name, url, ancestors)
-    self.basepath = basepath
+        doc = spider.LocalDocument(self, f, url)
+        doc.basepath = p
+        yield doc
