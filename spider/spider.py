@@ -3,10 +3,12 @@
 import argparse
 import importlib
 import math
+import multiprocessing
 import os
 import requests
 import stat
 import time
+import weakref
 
 from db import DB
 import config
@@ -21,6 +23,12 @@ class Document(object):
     self.name = name
     self.url = url
     self.ancestors = ancestors
+    self.children = []
+
+  def get(self):
+    self.report()
+    self.download()
+    self.read()
 
   def report(self):
     if self.url:
@@ -43,7 +51,7 @@ class Document(object):
 
     if self.ancestors:
       db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
-                     [[a.id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
+                     [[a().id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
 
     if self.text:
       db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
@@ -64,12 +72,11 @@ class LocalDocument(Document):
   def read(self):
     self.text = formats.read(self.basepath)
 
-  def children(self):
     for (filename, path) in formats.iter(self.basepath):
-      child = LocalDocument(self.repo, os.path.split(filename)[1], None, self.ancestors + [self])
+      child = LocalDocument(self.repo, os.path.split(filename)[1], None, self.ancestors + [weakref.ref(self)])
       child.basepath = path
       child.unlink = True
-      yield child
+      self.children.append(child)
 
   def __del__(self):
     if self.unlink:
@@ -116,9 +123,6 @@ class Spider(workerpool.WorkerPool):
     self.deinit_worker()
 
   def index_doc(self, doc):
-    doc.report()
-    doc.download()
-
     if doc.fresh():
       doc.touch()
       db.commit()
@@ -128,23 +132,31 @@ class Spider(workerpool.WorkerPool):
       self.do_index(doc)
       db.commit()
 
+    except utils.DownloadException:
+      db.rollback()
     except Exception:
       db.rollback()
       raise
 
-  def do_index(self, doc):
-    # TODO: make the transaction length as short as possible for performance
-
-    doc.read()
-    doc.index_one()
-
-    for child in doc.children():
-      child.report()
+  def dfs(self, doc, f):
+    f(doc)
+    failures = []
+    for child in doc.children:
       try:
-        child.download()
-        self.do_index(child)
+        self.dfs(child, f)
       except utils.DownloadException:
-        pass
+        failures.append(child)
+    doc.children = [c for c in doc.children if c not in failures]
+
+  def do_index(self, doc):
+    def dlfn(doc):
+      doc.get()
+
+    def ifn(doc):
+      doc.index_one()
+
+    self.dfs(doc, dlfn)
+    self.dfs(doc, ifn)
 
 def parse_args():
   ap = argparse.ArgumentParser()
@@ -159,6 +171,7 @@ def get_repo(name):
 
 def main():
   os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
+  multiprocessing.current_process().name = "mm"
   args = parse_args()
   repo = get_repo(args.repo)
   Spider(repo, args.workers).index()

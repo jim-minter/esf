@@ -24,7 +24,7 @@ def download(url):
   (fd, path) = tempfile.mkstemp()
   f = os.fdopen(fd, "w")
 
-  remaining = int(response.headers["Content-Length"])
+  remaining = int(response.headers.get("Content-Length", 0))
   r = response.raw
   while True:
     data = r.read(4096)
@@ -39,9 +39,14 @@ def download(url):
     os.unlink(path)
     raise Exception("short read")
 
-  mtime = parsetime(response.headers["Last-Modified"],
-                    "%a, %d %b %Y %H:%M:%S %Z")
-  os.utime(path, (mtime, mtime))
+  if "Last-Modified" in response.headers:
+    if "+0000" in response.headers["Last-Modified"]:
+      mtime = parsetime(response.headers["Last-Modified"],
+                        "%a, %d %b %Y %H:%M:%S +0000")
+    else:
+      mtime = parsetime(response.headers["Last-Modified"],
+                        "%a, %d %b %Y %H:%M:%S %Z")
+    os.utime(path, (mtime, mtime))
 
   return path
 

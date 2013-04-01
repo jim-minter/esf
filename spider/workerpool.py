@@ -53,6 +53,9 @@ class WorkerPool(object):
         utils.log.exception("")
         if config.getboolean("errors-fatal"):
           raise SystemExit
+      except KeyboardInterrupt:
+        utils.log.exception("")
+        raise SystemExit
 
     self.deinit_worker()
 

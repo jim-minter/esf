@@ -4,6 +4,7 @@ import lxml.html
 import os
 import requests
 import urlparse
+import weakref
 
 import config
 import formats
@@ -66,7 +67,7 @@ class DrupalRepo(object):
         href = href[0]
 
 
-class DrupalPage(spider.Document):
+class DrupalPage(spider.RemoteDocument):
   def __init__(self, repo, name, url, _type, mtime, href):
     super(DrupalPage, self).__init__(repo, name, url)
     self.type = _type
@@ -77,21 +78,24 @@ class DrupalPage(spider.Document):
     return self._mtime
 
   def read(self):
-    response = spider.s.get(self.url)
-    html = lxml.html.fromstring(response.text)
-    if self.type in ["Department", "Office", "Wiki Page"]:
+    html = lxml.html.parse(self.basepath)
+
+    if self.type in ["Department", "Office", "Project", "Wiki Page"]:
       self.text = body(html)
     elif self.type == "Webform":
       self.text = formats.html.strip_ws(body(html) + form(html))
+    elif self.type == "Filedepot Folder":
+      self.text = ""
+    else:
+      raise Exception("unknown content type %s" % self.type)
 
     if self.type == "Filedepot Folder":
       self.hrefs = filedepot_folder_files(html)
     else:
       self.hrefs = field_file_attachments(html)
 
-  def children(self):
     for href in self.hrefs:
-      yield spider.RemoteDocument(self.repo, os.path.split(href)[1], href, self.ancestors + [self])
+      self.children.append(spider.RemoteDocument(self.repo, os.path.split(href)[1], href, self.ancestors + [weakref.ref(self)]))
 
 
 def body(xml):
