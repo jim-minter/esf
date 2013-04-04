@@ -17,7 +17,7 @@ class DownloadException(Exception):
 
 
 def download(url):
-  response = spider.s.get(url, stream = True)
+  response = spider.ctx.s.get(url, stream = True)
   if response.status_code != 200:
     raise DownloadException()
 

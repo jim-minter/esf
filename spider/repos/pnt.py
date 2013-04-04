@@ -5,7 +5,7 @@ import os
 import config
 import spider
 
-class PntRepo(object):
+class PntRepo(spider.Repo):
   name = "pnt"
 
   def walk(self):

@@ -4,7 +4,16 @@ import config
 import multiprocessing
 import utils
 
-class WorkerPool(object):
+
+class Worker(object):
+  def init_worker(self):
+    pass
+
+  def deinit_worker(self):
+    pass
+
+
+class WorkerPool(Worker):
   def __init__(self, processcount = None, maxsize = 0):
     if not processcount or processcount < 1:
       processcount = multiprocessing.cpu_count()
@@ -33,12 +42,6 @@ class WorkerPool(object):
       p.join()
 
     self.processes = []
-
-  def init_worker(self):
-    pass
-
-  def deinit_worker(self):
-    pass
 
   def do_work(self, item):
     pass

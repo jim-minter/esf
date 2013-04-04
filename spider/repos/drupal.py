@@ -39,13 +39,19 @@ class DrupalConnection(object):
     return { k: self.__dict__[k] for k in self.__dict__.keys() if k != "s" }
 
 
-class DrupalRepo(object):
+class DrupalRepo(spider.Repo):
   name = "intranet"
 
   def __init__(self):
     self.conn = DrupalConnection()
     self.conn.login(config.get("drupal-user"),
                     config.get("drupal-pass").decode("base64"))
+
+  def init_worker(self):
+    spider.ctx.s = requests.session()
+
+  def deinit_worker(self):
+    del spider.ctx.s
 
   def walk(self):
     href = "/admin/content"

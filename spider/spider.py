@@ -10,8 +10,8 @@ import stat
 import time
 import weakref
 
-from db import DB
 import config
+import db
 import formats
 import utils
 import workerpool
@@ -41,24 +41,24 @@ class Document(object):
 
   def fresh(self):
     assert not self.ancestors
-    c = db.execute("SELECT mtime FROM documents WHERE url = ?", [self.url])
+    c = ctx.db.execute("SELECT mtime FROM documents WHERE url = ?", [self.url])
     r = c.fetchone()
     return r and r[0] == self.mtime()
 
   def index_one(self):
-    c = db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [self.repo.name, self.name, self.url, self.mtime()])
+    c = ctx.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [self.repo.name, self.name, self.url, self.mtime()])
     self.id = c.lastrowid
 
     if self.ancestors:
-      db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
-                     [[a().id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
+      ctx.db.executemany("INSERT INTO documents_tree VALUES (?, ?, ?)",
+                         [[a().id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
 
     if self.text:
-      db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
+      ctx.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
 
   def touch(self):
     assert not self.ancestors
-    db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree INNER JOIN documents ON documents_tree.parent = documents.rowid WHERE url = ?)", [self.url])
+    ctx.db.execute("UPDATE documents SET indextime = STRFTIME('%s', 'now') WHERE documents.rowid IN (SELECT child FROM documents_tree INNER JOIN documents ON documents_tree.parent = documents.rowid WHERE url = ?)", [self.url])
 
 
 class LocalDocument(Document):
@@ -89,19 +89,22 @@ class RemoteDocument(LocalDocument):
     self.unlink = True
 
 
+class Repo(workerpool.Worker):
+  pass
+
+
 class Spider(workerpool.WorkerPool):
   def __init__(self, repo, processcount = None):
     super(Spider, self).__init__(processcount, None)
     self.repo = repo
 
   def init_worker(self):
-    global db
-    db = DB(".db")
-    global s
-    s = requests.session()
+    ctx.db = db.DB(".db")
+    self.repo.init_worker()
 
   def deinit_worker(self):
-    db.close()
+    self.repo.deinit_worker()
+    ctx.db.close()
 
   def do_work(self, item):
     self.index_doc(item)
@@ -117,25 +120,25 @@ class Spider(workerpool.WorkerPool):
     self.stop_processes()
 
     self.init_worker()
-    db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
-               [self.repo.name, starttime])
-    db.commit()
+    ctx.db.execute("DELETE FROM documents WHERE repo = ? AND indextime < ?",
+                   [self.repo.name, starttime])
+    ctx.db.commit()
     self.deinit_worker()
 
   def index_doc(self, doc):
     if doc.fresh():
       doc.touch()
-      db.commit()
+      ctx.db.commit()
       return
 
     try:
       self.do_index(doc)
-      db.commit()
+      ctx.db.commit()
 
     except utils.DownloadException:
-      db.rollback()
+      ctx.db.rollback()
     except Exception:
-      db.rollback()
+      ctx.db.rollback()
       raise
 
   def dfs(self, doc, f):
@@ -175,6 +178,8 @@ def main():
   args = parse_args()
   repo = get_repo(args.repo)
   Spider(repo, args.workers).index()
+
+ctx = type("Context", (), {})()
 
 if __name__ == "__main__":
   import spider
