@@ -43,7 +43,6 @@ class DrupalRepo(object):
   name = "intranet"
 
   def __init__(self):
-    super(DrupalRepo, self).__init__()
     self.conn = DrupalConnection()
     self.conn.login(config.get("drupal-user"),
                     config.get("drupal-pass").decode("base64"))
@@ -60,7 +59,7 @@ class DrupalRepo(object):
         _url = self.conn.url(_href)
         _type = row[2].text
         _mtime = utils.parsetime(row[5].text, "%Y-%m-%d %H:%M")
-        yield DrupalPage(self, _name, _url, _type, _mtime, _href)
+        yield DrupalPage(self, _name, _url, _type, _mtime)
       
       href = html.xpath("//li[@class = 'pager-next']/a/@href")
       if href:
@@ -68,11 +67,10 @@ class DrupalRepo(object):
 
 
 class DrupalPage(spider.RemoteDocument):
-  def __init__(self, repo, name, url, _type, mtime, href):
+  def __init__(self, repo, name, url, _type, mtime):
     super(DrupalPage, self).__init__(repo, name, url)
     self.type = _type
     self._mtime = mtime
-    self.href = href
 
   def mtime(self):
     return self._mtime
