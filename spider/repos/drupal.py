@@ -43,6 +43,7 @@ class DrupalRepo(spider.Repo):
   name = "intranet"
 
   def __init__(self):
+    super(DrupalRepo, self).__init__()
     self.conn = DrupalConnection(repo)
     self.conn.login(self.config.get("user"),
                     self.config.get("pass").decode("base64"))
