@@ -40,8 +40,6 @@ class DrupalConnection(object):
 
 
 class DrupalRepo(spider.Repo):
-  name = "intranet"
-
   def __init__(self):
     super(DrupalRepo, self).__init__()
     self.conn = DrupalConnection(repo)

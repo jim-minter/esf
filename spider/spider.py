@@ -94,7 +94,8 @@ class RemoteDocument(LocalDocument):
 
 class Repo(workerpool.Worker):
   def __init__(self):
-    self.config = config.Config(Repo.classname_to_name(self.__class__.__name__))
+    self.name = Repo.classname_to_name(self.__class__.__name__)
+    self.config = config.Config(self.name)
 
   @staticmethod
   def get(name):
