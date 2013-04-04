@@ -1,12 +1,9 @@
 #!/usr/bin/python
 
 import os
-
 import spider
 
-class PntRepo(spider.Repo):
-  name = "pnt"
-
+class LocalRepo(spider.Repo):
   def walk(self):
     base = self.config.get("filebase")
     for dirpath, dirnames, filenames in os.walk(base):
