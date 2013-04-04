@@ -6,18 +6,18 @@ import requests
 import urlparse
 import weakref
 
-import config
 import formats
 import spider
 import utils
 
 
 class DrupalConnection(object):
-  def __init__(self):
+  def __init__(self, repo):
     self.s = requests.session()
+    self.repo = repo
 
   def url(self, href):
-    return urlparse.urljoin(config.get("drupal-url"), href)
+    return urlparse.urljoin(self.repo.config.get("url"), href)
 
   def request(self, method, href, data = None, headers = None):
     return self.s.request(method, self.url(href), data = data,
@@ -43,9 +43,9 @@ class DrupalRepo(spider.Repo):
   name = "intranet"
 
   def __init__(self):
-    self.conn = DrupalConnection()
-    self.conn.login(config.get("drupal-user"),
-                    config.get("drupal-pass").decode("base64"))
+    self.conn = DrupalConnection(repo)
+    self.conn.login(self.config.get("user"),
+                    self.config.get("pass").decode("base64"))
 
   def init_worker(self):
     spider.ctx.s = requests.session()

@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
-import config
 import multiprocessing
+
+from config import config
 import utils
 
 

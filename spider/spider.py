@@ -46,7 +46,8 @@ class Document(object):
     return r and r[0] == self.mtime()
 
   def index_one(self):
-    c = ctx.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))", [self.repo.name, self.name, self.url, self.mtime()])
+    c = ctx.db.execute("INSERT OR REPLACE INTO documents(repo, name, url, mtime, indextime) VALUES (?, ?, ?, ?, STRFTIME('%s', 'now'))",
+                       [self.repo.name, self.name, self.url, self.mtime()])
     self.id = c.lastrowid
 
     if self.ancestors:
@@ -54,7 +55,8 @@ class Document(object):
                          [[a().id, self.id, len(self.ancestors) - i] for (i, a) in enumerate(self.ancestors)])
 
     if self.text:
-      ctx.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)", [self.id, self.text])
+      ctx.db.execute("INSERT INTO documents_fts(rowid, content) VALUES (?, ?)",
+                     [self.id, self.text])
 
   def touch(self):
     assert not self.ancestors
@@ -73,7 +75,8 @@ class LocalDocument(Document):
     self.text = formats.read(self.basepath)
 
     for (filename, path) in formats.iter(self.basepath):
-      child = LocalDocument(self.repo, os.path.split(filename)[1], None, self.ancestors + [weakref.ref(self)])
+      child = LocalDocument(self.repo, os.path.split(filename)[1], None,
+                            self.ancestors + [weakref.ref(self)])
       child.basepath = path
       child.unlink = True
       self.children.append(child)
@@ -90,7 +93,22 @@ class RemoteDocument(LocalDocument):
 
 
 class Repo(workerpool.Worker):
-  pass
+  def __init__(self):
+    self.config = config.Config(Repo.classname_to_name(self.__class__.__name__))
+
+  @staticmethod
+  def get(name):
+    path = "repos.%s" % name
+    m = importlib.import_module(path)
+    return getattr(m, Repo.name_to_classname(name))()
+
+  @staticmethod
+  def name_to_classname(name):
+    return "%sRepo" % name.capitalize()
+
+  @staticmethod
+  def classname_to_name(repo):
+    return repo[:-4].lower()
 
 
 class Spider(workerpool.WorkerPool):
@@ -152,14 +170,8 @@ class Spider(workerpool.WorkerPool):
     doc.children = [c for c in doc.children if c not in failures]
 
   def do_index(self, doc):
-    def dlfn(doc):
-      doc.get()
-
-    def ifn(doc):
-      doc.index_one()
-
-    self.dfs(doc, dlfn)
-    self.dfs(doc, ifn)
+    self.dfs(doc, lambda d: d.get())
+    self.dfs(doc, lambda d: d.index_one())
 
 def parse_args():
   ap = argparse.ArgumentParser()
@@ -167,16 +179,11 @@ def parse_args():
   ap.add_argument("-w", "--workers", type = int, default = 4)
   return ap.parse_args()
 
-def get_repo(name):
-  path = "repos.%s" % name
-  m = importlib.import_module(path)
-  return getattr(m, "%sRepo" % name.capitalize())()
-
 def main():
   os.environ["REQUESTS_CA_BUNDLE"] = "/etc/pki/tls/certs/ca-bundle.crt"
   multiprocessing.current_process().name = "mm"
   args = parse_args()
-  repo = get_repo(args.repo)
+  repo = Repo.get(args.repo)
   Spider(repo, args.workers).index()
 
 ctx = type("Context", (), {})()

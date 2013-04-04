@@ -2,11 +2,18 @@
 
 import ConfigParser
 
-def get(option):
-  return config.get("config", option)
+defaults = { "errors-fatal": "false" }
 
-def getboolean(option):
-  return config.getboolean("config", option)
+class Config:
+  def __init__(self, section = "config"):
+    self.config = ConfigParser.RawConfigParser(defaults)
+    self.config.read(".config")
+    self.section = section
 
-config = ConfigParser.RawConfigParser()
-config.read(".config")
+  def get(self, option):
+    return self.config.get(self.section, option)
+
+  def getboolean(self, option):
+    return self.config.getboolean(self.section, option)
+
+config = Config()
